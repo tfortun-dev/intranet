@@ -1,0 +1,1131 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simulateur coût et impact carbone domicile-travail</title>
+  <style>
+    :root {
+      --bg: #fffdf7;
+      --surface: #f8f4eb;
+      --text: #111827;
+      --muted: #3f4b45;
+      --muted-2: #66736d;
+      --border: #d9d2c3;
+      --border-soft: #ebe4d8;
+      --focus: #045e4e;
+      --blue-bg: #e7f3ef;
+      --blue-border: #77b4a7;
+      --blue-text: #045e4e;
+      --green-bg: #e7f3ef;
+      --green-border: #045e4e;
+      --green-text: #045e4e;
+      --carbon-bg: #dff2eb;
+      --carbon-border: #045e4e;
+      --carbon-text: #045e4e;
+      --amber-bg: #fff3d7;
+      --amber-border: #d5a949;
+      --amber-text: #5f4707;
+      --radius-sm: 10px;
+      --radius: 16px;
+      --shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: transparent;
+      font-family: var(--font);
+      color: var(--text);
+      line-height: 1.45;
+      width: 100%;
+      min-height: 100vh;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    :focus-visible {
+      outline: 3px solid rgba(24, 95, 165, 0.35);
+      outline-offset: 3px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .app {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .panel {
+      background: var(--bg);
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      min-height: 100vh;
+    }
+
+    .panel::before {
+      content: "RdH";
+      position: absolute;
+      top: -24px;
+      right: -10px;
+      color: rgba(4, 94, 78, 0.07);
+      font-size: clamp(88px, 16vw, 180px);
+      line-height: 1;
+      font-weight: 950;
+      letter-spacing: -0.08em;
+      transform: rotate(-3deg);
+      pointer-events: none;
+    }
+
+    .header {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 24px;
+    }
+
+    .header-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 6px;
+      background: var(--focus);
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      font-weight: 950;
+      letter-spacing: -0.06em;
+      transform: rotate(-2deg);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 4vw, 40px);
+      line-height: 1.08;
+      font-weight: 850;
+      letter-spacing: -0.035em;
+      color: var(--text);
+      max-width: 850px;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: clamp(16px, 2vw, 18px);
+      max-width: 760px;
+    }
+
+    .controls-card {
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 22px;
+      background: var(--surface);
+    }
+
+    .control {
+      display: grid;
+      grid-template-columns: 190px minmax(160px, 1fr) 140px;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .control:last-child { margin-bottom: 0; }
+
+    .workplace-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #ffffff;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+
+    .workplace-title {
+      margin: 0 0 10px;
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .workplace-grid {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 12px 14px;
+      align-items: center;
+    }
+
+    .workplace-grid select,
+    .workplace-grid input[type="text"] {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 12px;
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    .address-line {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .autocomplete-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .suggestions-list {
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      margin: 0;
+      padding: 6px;
+      list-style: none;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: 0 10px 24px rgba(16, 24, 40, 0.14);
+      max-height: 230px;
+      overflow-y: auto;
+    }
+
+    .suggestion-item {
+      padding: 10px 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item[aria-selected="true"] {
+      background: var(--blue-bg);
+      color: var(--blue-text);
+    }
+
+    .primary-btn {
+      min-height: 44px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      padding: 9px 15px;
+      background: var(--focus);
+      color: #ffffff;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .primary-btn:hover { filter: brightness(0.95); }
+
+    .primary-btn:disabled {
+      cursor: wait;
+      opacity: 0.72;
+    }
+
+    .small-btn {
+      border: 1px solid var(--focus);
+      border-radius: 999px;
+      background: #ffffff;
+      color: var(--focus);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .small-btn:hover {
+      background: var(--carbon-bg);
+    }
+
+    .status-message {
+      grid-column: 2;
+      margin: -2px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status-message.error { color: #b42318; }
+    .status-message.success { color: var(--green-text); }
+
+    .control label,
+    .field-label {
+      font-size: 15px;
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .field-help {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted-2);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      min-height: 36px;
+      accent-color: var(--focus);
+      cursor: pointer;
+    }
+
+    .value {
+      font-size: 15px;
+      font-weight: 850;
+      color: var(--text);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .fuel-zone {
+      display: grid;
+      grid-template-columns: 190px 1fr 140px;
+      gap: 14px;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .fuel-range-wrap {
+      display: grid;
+      gap: 6px;
+    }
+
+    .range-scale {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted-2);
+      font-size: 12px;
+    }
+
+    .price-table-card {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      border: 1px solid var(--border-soft);
+    }
+
+    .price-table-title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 850;
+      color: var(--text);
+    }
+
+    .price-table-subtitle {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 28px 0 12px;
+      font-size: clamp(19px, 2.4vw, 24px);
+      line-height: 1.2;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .section-kicker {
+      margin: -6px 0 13px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .kpi {
+      border-radius: var(--radius);
+      padding: 17px;
+      border: 1px solid var(--border-soft);
+      background: #fff;
+      min-width: 0;
+    }
+
+    .kpi.amber { background: var(--amber-bg); border-color: var(--amber-border); }
+    .kpi.blue { background: var(--blue-bg); border-color: var(--blue-border); }
+    .kpi.green { background: var(--green-bg); border-color: var(--green-border); }
+
+    .kpi-label {
+      margin: 0 0 7px;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 850;
+    }
+
+    .kpi.amber .kpi-label,
+    .kpi.amber .kpi-sub { color: #854f0b; }
+    .kpi.blue .kpi-label,
+    .kpi.blue .kpi-sub { color: #185fa5; }
+    .kpi.green .kpi-label,
+    .kpi.green .kpi-sub { color: #3b6d11; }
+
+    .kpi-value {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.08;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+    }
+
+    .kpi.amber .kpi-value { color: var(--amber-text); }
+    .kpi.blue .kpi-value { color: var(--blue-text); }
+    .kpi.green .kpi-value { color: var(--green-text); }
+
+    .kpi-sub {
+      margin: 7px 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .eco-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .eco-block {
+      border-radius: var(--radius);
+      border: 2px solid;
+      padding: 17px;
+    }
+
+    .eco-block.money { border-color: var(--green-border); background: var(--green-bg); }
+    .eco-block.carbon { border-color: var(--carbon-border); background: var(--carbon-bg); }
+
+    .eco-title {
+      margin: 0 0 12px;
+      font-size: 20px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+
+    .eco-block.money .eco-title { color: var(--green-text); }
+    .eco-block.carbon .eco-title { color: var(--carbon-text); }
+
+    .eco-item {
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+    }
+
+    .eco-label {
+      margin: 0 0 5px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .eco-value {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.12;
+      font-weight: 900;
+    }
+
+    .eco-block.money .eco-value { color: var(--green-text); }
+    .eco-block.carbon .eco-value { color: var(--carbon-text); }
+
+    .eco-sub {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 680px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--border-soft);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child, td:first-child { text-align: left; }
+    tbody tr:last-child td { border-bottom: 0; }
+
+    th {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 850;
+      background: var(--surface);
+    }
+
+    caption {
+      text-align: left;
+      padding: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .row-label {
+      color: var(--muted);
+      font-weight: 850;
+    }
+
+    .money { color: var(--green-text); font-weight: 850; }
+    .carbon { color: var(--carbon-text); font-weight: 850; }
+
+    .note {
+      margin: 18px 0 0;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-soft);
+      color: var(--muted-2);
+      font-size: 13px;
+    }
+
+    @media (max-width: 820px) {
+      .app { padding: 0; }
+      .panel { padding: 0; border-radius: 0; }
+      .header { grid-template-columns: 1fr; }
+      .header-icon { width: 48px; height: 48px; }
+      .control,
+      .fuel-zone {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .value { text-align: left; }
+      .cards,
+      .eco-grid { grid-template-columns: 1fr; }
+      th, td { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel" aria-labelledby="page-title">
+      <header class="header">
+        <div class="header-icon" aria-hidden="true">RdH</div>
+        <div>
+          <h1 id="page-title">Simulateur du coût et de l’impact carbone des trajets domicile-travail</h1>
+          <p class="subtitle">Visualisez des estimations de trajets domicile-travail selon différents rythmes de présence sur site.</p>
+        </div>
+      </header>
+
+      <section class="controls-card" aria-label="Paramètres du simulateur">
+        <div class="workplace-card" aria-labelledby="workplace-title">
+          <p class="workplace-title" id="workplace-title">1. Calculez votre distance domicile-travail</p>
+          <div class="workplace-grid">
+            <label for="workplace-select" class="field-label">
+              Lieu de travail
+              <span class="field-help">Choisissez le site d’arrivée</span>
+            </label>
+            <select id="workplace-select">
+              <option value="mpakllet">Le Pallet (106 ZA des Rôtelières)</option>
+              <option value="bouchemaine">Bouchemaine (7 rue du Champ de l’Aire)</option>
+              <option value="angers">Angers</option>
+              <option value="annecy">Annecy</option>
+              <option value="avignon">Avignon</option>
+              <option value="bayonne">Bayonne</option>
+              <option value="besancon">Besançon</option>
+              <option value="brest">Brest</option>
+              <option value="bordeaux">Bordeaux</option>
+              <option value="clermont_ferrand">Clermont-Ferrand</option>
+              <option value="grenoble">Grenoble</option>
+              <option value="hyeres">Hyères</option>
+              <option value="lyon">Lyon</option>
+              <option value="marseille">Marseille</option>
+              <option value="metz">Metz</option>
+              <option value="montpellier">Montpellier</option>
+              <option value="mulhouse">Mulhouse</option>
+              <option value="nantes">Nantes</option>
+              <option value="perpignan">Perpignan</option>
+              <option value="reims">Reims</option>
+              <option value="rennes">Rennes</option>
+              <option value="rouen">Rouen</option>
+              <option value="rungis_500">Rungis — secteur Fleurs 500</option>
+              <option value="rungis_125">Rungis — secteur Fleurs 125</option>
+              <option value="strasbourg">Strasbourg</option>
+              <option value="toulouse">Toulouse</option>
+              <option value="valence">Valence</option>
+              <option value="other">Autre lieu</option>
+            </select>
+
+            <label for="custom-workplace-address" class="field-label" id="custom-workplace-label" hidden>
+              Adresse du lieu de travail
+              <span class="field-help">Uniquement si vous choisissez “Autre lieu”</span>
+            </label>
+            <input type="text" id="custom-workplace-address" placeholder="Ex. 12 rue de l’Entreprise, Angers" hidden />
+
+            <label for="home-address" class="field-label">
+              Votre adresse de départ
+              <span class="field-help">Adresse utilisée uniquement pour calculer la distance</span>
+            </label>
+            <div class="address-line">
+              <div class="autocomplete-wrap">
+                <input type="text" id="home-address" autocomplete="off" placeholder="Ex. 15 rue Victor Hugo, Nantes" aria-autocomplete="list" aria-expanded="false" aria-controls="home-address-suggestions" />
+                <ul class="suggestions-list" id="home-address-suggestions" role="listbox" hidden></ul>
+              </div>
+              <button type="button" class="primary-btn" id="calculate-distance-btn">Calculer</button>
+            </div>
+
+            <p class="status-message" id="distance-status" aria-live="polite">Saisissez une adresse puis cliquez sur “Calculer”. Le curseur ci-dessous reste modifiable manuellement.</p>
+          </div>
+        </div>
+
+        <div class="control">
+          <label for="km-slider">
+            Distance aller-retour
+            <span class="field-help">Calculée automatiquement ou ajustable à la main</span>
+          </label>
+          <input type="range" min="5" max="150" step="0.5" value="43.4" id="km-slider" aria-describedby="km-out" />
+          <output class="value" id="km-out" for="km-slider">43,4 km/jour</output>
+        </div>
+
+        <div class="control">
+          <label for="conso-slider">
+            Consommation du véhicule
+            <span class="field-help">En litres pour 100 km</span>
+          </label>
+          <input type="range" min="3" max="12" step="0.1" value="5.2" id="conso-slider" aria-describedby="conso-out" />
+          <output class="value" id="conso-out" for="conso-slider">5,2 L/100 km</output>
+        </div>
+
+        <div class="fuel-zone">
+          <label for="fuel-price-slider" class="field-label">
+            Prix de l’essence
+            <span class="field-help">À ajuster selon votre station</span>
+          </label>
+          <div class="fuel-range-wrap">
+            <input type="range" min="1.40" max="2.40" step="0.001" value="2.05" id="fuel-price-slider" aria-describedby="fuel-price-out fuel-price-help" />
+            <div class="range-scale" aria-hidden="true">
+              <span>1,40 €/L</span>
+              <span>2,40 €/L</span>
+            </div>
+          </div>
+          <output class="value" id="fuel-price-out" for="fuel-price-slider">2,050 €/L</output>
+        </div>
+
+        <div class="price-table-card" id="fuel-price-help">
+          <p class="price-table-title">Prix carburants autour de l’adresse saisie</p>
+          <p class="price-table-subtitle" id="fuel-local-status" aria-live="polite">Après le calcul de distance, le simulateur affichera les prix moyens des stations proches de l’adresse du salarié.</p>
+          <div class="table-wrap">
+            <table aria-label="Prix moyens locaux des carburants">
+              <thead>
+                <tr>
+                  <th scope="col">Carburant</th>
+                  <th scope="col">Prix moyen local</th>
+                  <th scope="col">Facteur CO₂</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody id="fuel-local-body">
+                <tr><td colspan="4" class="row-label">Renseignez une adresse puis cliquez sur “Calculer”.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note" style="margin-top:10px;padding-top:10px">Les prix locaux sont calculés à partir des stations les plus proches de l’adresse saisie. Le curseur reste disponible pour saisir un prix réel si besoin.</p>
+        </div>
+      </section>
+
+      <h2 class="section-title">Estimations mensuelles liées aux trajets</h2>
+      <p class="section-kicker">Simulation indicative selon différents rythmes de présence.</p>
+      <div class="cards" id="cost-cards"></div>
+
+      <h2 class="section-title">Estimations mensuelles des émissions liées aux trajets</h2>
+      <p class="section-kicker">Calcul indicatif basé sur des hypothèses moyennes.</p>
+      <div class="cards" id="carbon-cards"></div>
+
+      <h2 class="section-title">Comparaison indicative des estimations</h2>
+      <div class="eco-grid">
+        <section class="eco-block money" aria-labelledby="money-title">
+          <h3 class="eco-title" id="money-title">Variation estimée des coûts</h3>
+          <div class="eco-grid" id="money-savings"></div>
+        </section>
+
+        <section class="eco-block carbon" aria-labelledby="carbon-title">
+          <h3 class="eco-title" id="carbon-title">Variation estimée des émissions</h3>
+          <div class="eco-grid" id="carbon-savings"></div>
+        </section>
+      </div>
+
+      <h2 class="section-title">Détail des calculs</h2>
+      <div class="table-wrap">
+        <table aria-label="Détail du coût et du carbone selon les jours travaillés">
+          <thead>
+            <tr>
+              <th scope="col">Indicateur</th>
+              <th scope="col">5 j/sem</th>
+              <th scope="col">4 j/sem</th>
+              <th scope="col">3 j/sem</th>
+            </tr>
+          </thead>
+          <tbody id="detail-body"></tbody>
+        </table>
+      </div>
+
+      <p class="note" id="note"></p>
+    </section>
+  </main>
+
+  <script>
+    const WEEKS_PER_MONTH = 4.33;
+    const WORK_DAYS = [5, 4, 3];
+    const DAY_STYLES = { 5: 'amber', 4: 'blue', 3: 'green' };
+    const CO2_FACTOR_GASOLINE = 2.31;
+    const FUEL_REFERENCE_PRICES = {
+      e10: { label: 'E10', co2: 2.28, priceField: 'e10_prix' },
+      sp95: { label: 'SP95', co2: 2.31, priceField: 'sp95_prix' },
+      sp98: { label: 'SP98', co2: 2.31, priceField: 'sp98_prix' },
+      gazole: { label: 'Gazole', co2: 2.68, priceField: 'gazole_prix' }
+    };
+    const FUEL_API_URL = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records';
+    const GOOGLE_SHEETS_WEB_APP_URL = '';
+    const fuelPriceCache = new Map();
+
+    const WORKPLACES = {
+      mpakllet: { label: 'Le Pallet', address: '106 ZA des Rôtelières, 44330 Le Pallet, France' },
+      bouchemaine: { label: 'Bouchemaine', address: '7 rue du Champ de l’Aire, 49080 Bouchemaine, France' },
+      angers: { label: 'Angers', address: '1 rue des Brunelleries, 49080 Bouchemaine, France' },
+      annecy: { label: 'Annecy', address: '755 route de Champ Farçon, 74370 Argonay, France' },
+      avignon: { label: 'Avignon', address: '15 avenue de la Counoise, 84320 Entraigues-sur-la-Sorgue, France' },
+      bayonne: { label: 'Bayonne', address: 'Chemin de Lortenia, CD 254, 64200 Arcangues, France' },
+      besancon: { label: 'Besançon', address: 'Z.I. de Thise-Chalezeule, rue du Valset, 25220 Chalezeule, France' },
+      brest: { label: 'Brest', address: 'Rue Romain Desfossés, 29200 Brest, France' },
+      bordeaux: { label: 'Bordeaux', address: 'Les Serres de Montesquieu, 297 chemin des Marguerites, 33140 Cadaujac, France' },
+      clermont_ferrand: { label: 'Clermont-Ferrand', address: '15 rue Gutenberg, 63100 Clermont-Ferrand, France' },
+      grenoble: { label: 'Grenoble', address: 'Z.I. Les Isles Cordées, 38113 Veurey-Voroize, France' },
+      hyeres: { label: 'Hyères', address: 'Marché aux fleurs, Box 26, 1202 Vieux chemin de Toulon, 83400 Hyères, France' },
+      lyon: { label: 'Lyon', address: '52 chemin de Genas, 69800 Saint-Priest, France' },
+      marseille: { label: 'Marseille', address: '713 marché national des Arnavaux, secteur Fleurs, 13014 Marseille, France' },
+      metz: { label: 'Metz', address: 'Centre Florraine, Z.A.C. des Jonquières II, rue Louis Blériot, 57640 Argancy, France' },
+      montpellier: { label: 'Montpellier', address: 'M.I.N. de Montpellier, Boîte n°22, 281 avenue du Marché Gare, 34070 Montpellier, France' },
+      mulhouse: { label: 'Mulhouse', address: '48 rue des Gaulois, 68390 Sausheim, France' },
+      nantes: { label: 'Nantes', address: 'M.I.N., 71 boulevard Alfred Nobel, 44400 Rezé, France' },
+      perpignan: { label: 'Perpignan', address: 'AMAPOLA, 439 avenue Georges Caustier, 66000 Perpignan, France' },
+      reims: { label: 'Reims', address: '19 rue Robert Fulton, BP 444, 51682 Reims Cedex 2, France' },
+      rennes: { label: 'Rennes', address: '7A rue des Charmilles, 35510 Cesson-Sévigné, France' },
+      rouen: { label: 'Rouen', address: 'M.I.N. de Rouen, avenue du Commandant Bicheray, 76000 Rouen, France' },
+      rungis_500: { label: 'Rungis — secteur Fleurs 500', address: 'M.I.N. de Rungis, secteur Fleurs 500, 182 avenue des Pépinières, 94648 Rungis Cedex, France' },
+      rungis_125: { label: 'Rungis — secteur Fleurs 125', address: 'M.I.N. de Rungis, secteur Fleurs 125, 209 avenue Côte d’Azur, 94631 Rungis Cedex, France' },
+      strasbourg: { label: 'Strasbourg', address: 'Marché Gare, rue du Marché Gare, 67200 Strasbourg, France' },
+      toulouse: { label: 'Toulouse', address: 'M.I.N. de Toulouse, Bâtiment Fleurs, Boîte n°33, 146 avenue des États-Unis, 31200 Toulouse, France' },
+      valence: { label: 'Valence', address: 'Z.A. 2000, rue Topaze, 26320 Saint-Marcel-lès-Valence, France' }
+    };
+
+    const state = {
+      fuelPrice: 2.05,
+      co2Factor: CO2_FACTOR_GASOLINE,
+      consumption: 5.2,
+      dailyKm: 43.4
+    };
+
+    const formatDecimal = (value, digits = 1) => Number(value).toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const formatEuro = value => Number(value).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    const formatFuelPrice = value => Number(value).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' €/L';
+    const formatInteger = value => Math.round(Number(value)).toLocaleString('fr-FR');
+
+    function calculate(daysPerWeek) {
+      const monthlyKm = state.dailyKm * daysPerWeek * WEEKS_PER_MONTH;
+      const liters = (monthlyKm * state.consumption) / 100;
+      const monthlyCost = liters * state.fuelPrice;
+      const monthlyCo2 = liters * state.co2Factor;
+      return { weeklyKm: state.dailyKm * daysPerWeek, monthlyKm, annualKm: monthlyKm * 12, liters, monthlyCost, annualCost: monthlyCost * 12, monthlyCo2, annualCo2: monthlyCo2 * 12 };
+    }
+
+    function createKpiCard({ days, value, sub }) {
+      const card = document.createElement('article');
+      card.className = `kpi ${DAY_STYLES[days]}`;
+      card.innerHTML = `<p class="kpi-label">${days} jours / semaine</p><p class="kpi-value">${value}</p><p class="kpi-sub">${sub}</p>`;
+      return card;
+    }
+
+    function createSavingItem(label, value, sub) {
+      const item = document.createElement('article');
+      item.className = 'eco-item';
+      item.innerHTML = `<p class="eco-label">${label}</p><p class="eco-value">${value}</p><p class="eco-sub">${sub}</p>`;
+      return item;
+    }
+
+    function renderCards(results) {
+      const costCards = document.getElementById('cost-cards');
+      const carbonCards = document.getElementById('carbon-cards');
+      costCards.innerHTML = '';
+      carbonCards.innerHTML = '';
+      WORK_DAYS.forEach(days => {
+        const data = results[days];
+        costCards.appendChild(createKpiCard({ days, value: formatEuro(data.monthlyCost), sub: `${formatInteger(data.monthlyKm)} km · ${formatDecimal(data.liters)} L` }));
+        carbonCards.appendChild(createKpiCard({ days, value: `${formatDecimal(data.monthlyCo2)} kg CO₂`, sub: `${formatInteger(data.annualCo2)} kg/an` }));
+      });
+    }
+
+    function renderSavings(results) {
+      const moneySavings = document.getElementById('money-savings');
+      const carbonSavings = document.getElementById('carbon-savings');
+      moneySavings.innerHTML = '';
+      carbonSavings.innerHTML = '';
+      [4, 3].forEach(days => {
+        const savedMonthlyCost = results[5].monthlyCost - results[days].monthlyCost;
+        const savedMonthlyCo2 = results[5].monthlyCo2 - results[days].monthlyCo2;
+        moneySavings.appendChild(createSavingItem(`${days} j/sem`, `${formatEuro(savedMonthlyCost)}/mois`, `estimation annuelle : ${formatInteger(savedMonthlyCost * 12)} €`));
+        carbonSavings.appendChild(createSavingItem(`${days} j/sem`, `${formatDecimal(savedMonthlyCo2)} kg/mois`, `estimation annuelle : ${formatInteger(savedMonthlyCo2 * 12)} kg`));
+      });
+    }
+
+    function renderTable(results) {
+      const rows = [
+        ['Km/semaine', data => `${formatInteger(data.weeklyKm)} km`],
+        ['Km/mois', data => `${formatInteger(data.monthlyKm)} km`],
+        ['Km/an', data => `${formatInteger(data.annualKm)} km`],
+        ['Litres/mois', data => `${formatDecimal(data.liters)} L`],
+        ['Coût/mois', data => formatEuro(data.monthlyCost), 'money'],
+        ['Coût/an', data => `${formatInteger(data.annualCost)} €`, 'money'],
+        ['CO₂/mois', data => `${formatDecimal(data.monthlyCo2)} kg`, 'carbon'],
+        ['CO₂/an', data => `${formatInteger(data.annualCo2)} kg`, 'carbon']
+      ];
+      const tbody = document.getElementById('detail-body');
+      tbody.innerHTML = '';
+      rows.forEach(([label, getValue, className = '']) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="row-label">${label}</td>`;
+        WORK_DAYS.forEach(days => {
+          const td = document.createElement('td');
+          td.className = className;
+          td.textContent = getValue(results[days]);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderNote() {
+      document.getElementById('note').textContent = `Informations indicatives : ${WEEKS_PER_MONTH.toLocaleString('fr-FR')} semaines/mois · prix carburant saisi ${formatFuelPrice(state.fuelPrice)} · facteur ${formatDecimal(state.co2Factor, 2)} kg CO₂/L · hors péage, assurance, entretien et usure du véhicule.`;
+    }
+
+    function render() {
+      const results = Object.fromEntries(WORK_DAYS.map(days => [days, calculate(days)]));
+      renderCards(results);
+      renderSavings(results);
+      renderTable(results);
+      renderNote();
+    }
+
+    async function fetchAddressSuggestions(query) {
+      if (query.trim().length < 3) return [];
+      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5&autocomplete=1`;
+      const response = await fetch(url);
+      if (!response.ok) return [];
+      const data = await response.json();
+      return (data.features || []).map(feature => ({ label: feature.properties.label, postcode: feature.properties.postcode || '', lon: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] }));
+    }
+
+    async function geocodeAddress(address) {
+      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(address)}&limit=1`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Adresse introuvable');
+      const data = await response.json();
+      const feature = data.features && data.features[0];
+      if (!feature) throw new Error('Adresse introuvable');
+      const [lon, lat] = feature.geometry.coordinates;
+      return { lon, lat, label: feature.properties.label, postcode: feature.properties.postcode || '' };
+    }
+
+    async function getRoadDistanceKm(origin, destination) {
+      const url = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=false`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Distance impossible à calculer');
+      const data = await response.json();
+      const route = data.routes && data.routes[0];
+      if (!route) throw new Error('Aucun itinéraire trouvé');
+      return route.distance / 1000;
+    }
+
+    function setDistanceStatus(message, type = '') {
+      const status = document.getElementById('distance-status');
+      status.textContent = message;
+      status.className = `status-message ${type}`.trim();
+    }
+
+    function setFuelStatus(message) {
+      const status = document.getElementById('fuel-local-status');
+      if (status) status.textContent = message;
+    }
+
+    function getDepartmentCodeFromPostcode(postcode) {
+      if (!postcode || postcode.length < 2) return '';
+      if (postcode.startsWith('20')) return postcode.slice(0, 3);
+      return postcode.slice(0, 2);
+    }
+
+    function getAverage(values) {
+      const valid = values.map(Number).filter(value => Number.isFinite(value) && value > 0);
+      if (!valid.length) return null;
+      const average = valid.reduce((sum, value) => sum + value, 0) / valid.length;
+      return Number(average.toFixed(3));
+    }
+
+    function applyFuelPrice(price, co2Factor) {
+      const fuelPriceSlider = document.getElementById('fuel-price-slider');
+      const fuelPriceOutput = document.getElementById('fuel-price-out');
+      state.fuelPrice = Number(price);
+      state.co2Factor = Number(co2Factor);
+      fuelPriceSlider.value = Math.min(Math.max(state.fuelPrice, Number(fuelPriceSlider.min)), Number(fuelPriceSlider.max));
+      fuelPriceOutput.textContent = formatFuelPrice(state.fuelPrice);
+      render();
+    }
+
+    function renderFuelRows(summary) {
+      const tbody = document.getElementById('fuel-local-body');
+      tbody.innerHTML = '';
+      Object.entries(FUEL_REFERENCE_PRICES).forEach(([fuelKey, fuel]) => {
+        const price = summary[fuelKey];
+        const tr = document.createElement('tr');
+        if (!price) {
+          tr.innerHTML = `<td class="row-label">${fuel.label}</td><td>Non disponible</td><td>${formatDecimal(fuel.co2, 2)} kg CO₂/L</td><td>—</td>`;
+          tbody.appendChild(tr);
+          return;
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'small-btn';
+        btn.textContent = 'Utiliser ce prix';
+        btn.addEventListener('click', () => applyFuelPrice(price, fuel.co2));
+        tr.innerHTML = `<td class="row-label">${fuel.label}</td><td>${formatFuelPrice(price)}</td><td>${formatDecimal(fuel.co2, 2)} kg CO₂/L</td><td></td>`;
+        tr.lastElementChild.appendChild(btn);
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadDepartmentFuelPrices(postcode) {
+      const tbody = document.getElementById('fuel-local-body');
+      const departmentCode = getDepartmentCodeFromPostcode(postcode);
+      if (!departmentCode) {
+        setFuelStatus('Impossible de déterminer le département. Utilisez le curseur manuel.');
+        tbody.innerHTML = '<tr><td colspan="4" class="row-label">Département non reconnu.</td></tr>';
+        return;
+      }
+      if (fuelPriceCache.has(departmentCode)) {
+        renderFuelRows(fuelPriceCache.get(departmentCode));
+        setFuelStatus(`Prix moyens récupérés pour le département ${departmentCode}.`);
+        return;
+      }
+
+      setFuelStatus(`Chargement des prix moyens du département ${departmentCode}…`);
+      tbody.innerHTML = '<tr><td colspan="4" class="row-label">Chargement des prix locaux…</td></tr>';
+      try {
+        const params = new URLSearchParams({
+          limit: '100',
+          where: `code_departement="${departmentCode}"`,
+          select: 'e10_prix,sp95_prix,sp98_prix,gazole_prix'
+        });
+        const response = await fetch(`${FUEL_API_URL}?${params.toString()}`);
+        if (!response.ok) throw new Error('API carburants indisponible');
+        const data = await response.json();
+        const rows = data.results || [];
+        if (!rows.length) throw new Error('Aucune station trouvée');
+        const summary = {
+          e10: getAverage(rows.map(row => row.e10_prix)),
+          sp95: getAverage(rows.map(row => row.sp95_prix)),
+          sp98: getAverage(rows.map(row => row.sp98_prix)),
+          gazole: getAverage(rows.map(row => row.gazole_prix))
+        };
+        fuelPriceCache.set(departmentCode, summary);
+        renderFuelRows(summary);
+        setFuelStatus(`Prix moyens calculés sur les stations disponibles du département ${departmentCode}.`);
+      } catch (error) {
+        setFuelStatus('Impossible de charger les prix locaux. Le curseur manuel reste disponible.');
+        tbody.innerHTML = '<tr><td colspan="4" class="row-label">Prix locaux indisponibles.</td></tr>';
+      }
+    }
+
+    async function saveSimulation(results, context = {}) {
+      if (!GOOGLE_SHEETS_WEB_APP_URL) return;
+      const workplaceSelect = document.getElementById('workplace-select');
+      const payload = {
+        date: new Date().toISOString(),
+        workplace: workplaceSelect.options[workplaceSelect.selectedIndex].textContent,
+        homeAddress: document.getElementById('home-address').value.trim(),
+        dailyKm: state.dailyKm,
+        consumption: state.consumption,
+        fuelPrice: state.fuelPrice,
+        co2Factor: state.co2Factor,
+        cost5: results[5].monthlyCost,
+        cost4: results[4].monthlyCost,
+        cost3: results[3].monthlyCost,
+        co2_5: results[5].monthlyCo2,
+        co2_4: results[4].monthlyCo2,
+        co2_3: results[3].monthlyCo2,
+        source: context.source || 'manual'
+      };
+      try {
+        await fetch(GOOGLE_SHEETS_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      } catch (error) {
+        console.warn('Simulation non enregistrée', error);
+      }
+    }
+
+    async function calculateDistanceFromAddress() {
+      const calculateDistanceBtn = document.getElementById('calculate-distance-btn');
+      calculateDistanceBtn.disabled = true;
+      calculateDistanceBtn.textContent = 'Calcul…';
+      const workplaceSelect = document.getElementById('workplace-select');
+      const customWorkplaceInput = document.getElementById('custom-workplace-address');
+      const homeInput = document.getElementById('home-address');
+      const kmSlider = document.getElementById('km-slider');
+      const kmOutput = document.getElementById('km-out');
+      const homeAddress = homeInput.value.trim();
+      const workplaceAddress = workplaceSelect.value === 'other' ? customWorkplaceInput.value.trim() : WORKPLACES[workplaceSelect.value].address;
+      if (!homeAddress) { setDistanceStatus('Veuillez saisir votre adresse de départ.', 'error'); return; }
+      if (!workplaceAddress) { setDistanceStatus('Veuillez saisir l’adresse du lieu de travail.', 'error'); return; }
+      try {
+        setDistanceStatus('Calcul de la distance en cours…');
+        const [origin, destination] = await Promise.all([geocodeAddress(homeAddress), geocodeAddress(workplaceAddress)]);
+        const oneWayKm = await getRoadDistanceKm(origin, destination);
+        const roundTripKm = Math.max(oneWayKm * 2, 5);
+        state.dailyKm = Number(roundTripKm.toFixed(1));
+        kmSlider.value = Math.min(state.dailyKm, Number(kmSlider.max));
+        kmOutput.textContent = `${formatDecimal(state.dailyKm)} km/jour`;
+        render();
+        loadDepartmentFuelPrices(origin.postcode);
+        const results = Object.fromEntries(WORK_DAYS.map(days => [days, calculate(days)]));
+        saveSimulation(results, { source: 'address_distance' });
+        const sliderInfo = state.dailyKm > Number(kmSlider.max) ? ' Le curseur reste limité à 150 km, mais le calcul utilise bien la distance réelle.' : '';
+        setDistanceStatus(`Distance calculée : ${formatDecimal(oneWayKm)} km aller, soit ${formatDecimal(state.dailyKm)} km aller-retour.${sliderInfo}`, 'success');
+      } catch (error) {
+        setDistanceStatus('Calcul impossible. Vérifiez les adresses ou ajustez directement la distance avec le curseur.', 'error');
+      } finally {
+        calculateDistanceBtn.disabled = false;
+        calculateDistanceBtn.textContent = 'Calculer';
+      }
+    }
+
+    function debounce(callback, delay = 250) {
+      let timer;
+      return (...args) => { clearTimeout(timer); timer = setTimeout(() => callback(...args), delay); };
+    }
+
+    function closeSuggestions() {
+      const input = document.getElementById('home-address');
+      const list = document.getElementById('home-address-suggestions');
+      list.hidden = true;
+      list.innerHTML = '';
+      input.setAttribute('aria-expanded', 'false');
+    }
+
+    function renderAddressSuggestions(suggestions) {
+      const input = document.getElementById('home-address');
+      const list = document.getElementById('home-address-suggestions');
+      list.innerHTML = '';
+      if (!suggestions.length) { closeSuggestions(); return; }
+      suggestions.forEach((suggestion, index) => {
+        const item = document.createElement('li');
+        item.className = 'suggestion-item';
+        item.id = `home-address-suggestion-${index}`;
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', 'false');
+        item.textContent = suggestion.label;
+        item.addEventListener('mousedown', event => { event.preventDefault(); input.value = suggestion.label; closeSuggestions(); });
+        list.appendChild(item);
+      });
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    function bindAddressAutocomplete() {
+      const input = document.getElementById('home-address');
+      const list = document.getElementById('home-address-suggestions');
+      let activeIndex = -1;
+      const updateSuggestions = debounce(async () => {
+        const suggestions = await fetchAddressSuggestions(input.value);
+        activeIndex = -1;
+        renderAddressSuggestions(suggestions);
+      }, 250);
+      input.addEventListener('input', updateSuggestions);
+      input.addEventListener('keydown', event => {
+        const items = Array.from(list.querySelectorAll('.suggestion-item'));
+        if (list.hidden || !items.length) return;
+        if (event.key === 'ArrowDown') { event.preventDefault(); activeIndex = Math.min(activeIndex + 1, items.length - 1); }
+        else if (event.key === 'ArrowUp') { event.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); }
+        else if (event.key === 'Enter' && activeIndex >= 0) { event.preventDefault(); input.value = items[activeIndex].textContent; closeSuggestions(); return; }
+        else if (event.key === 'Escape') { closeSuggestions(); return; }
+        else { return; }
+        items.forEach((item, index) => {
+          const isActive = index === activeIndex;
+          item.setAttribute('aria-selected', String(isActive));
+          if (isActive) input.setAttribute('aria-activedescendant', item.id);
+        });
+      });
+      document.addEventListener('click', event => { if (!event.target.closest('.autocomplete-wrap')) closeSuggestions(); });
+    }
+
+    function bindEvents() {
+      const kmSlider = document.getElementById('km-slider');
+      const consoSlider = document.getElementById('conso-slider');
+      const fuelPriceSlider = document.getElementById('fuel-price-slider');
+      const workplaceSelect = document.getElementById('workplace-select');
+      const customWorkplaceLabel = document.getElementById('custom-workplace-label');
+      const customWorkplaceInput = document.getElementById('custom-workplace-address');
+      const calculateDistanceBtn = document.getElementById('calculate-distance-btn');
+      const kmOutput = document.getElementById('km-out');
+      const consoOutput = document.getElementById('conso-out');
+      const fuelPriceOutput = document.getElementById('fuel-price-out');
+      kmSlider.addEventListener('input', event => { state.dailyKm = Number(event.target.value); kmOutput.textContent = `${formatDecimal(state.dailyKm)} km/jour`; render(); });
+      consoSlider.addEventListener('input', event => { state.consumption = Number(event.target.value); consoOutput.textContent = `${formatDecimal(state.consumption)} L/100 km`; render(); });
+      fuelPriceSlider.addEventListener('input', event => { state.fuelPrice = Number(event.target.value); fuelPriceOutput.textContent = formatFuelPrice(state.fuelPrice); render(); });
+      workplaceSelect.addEventListener('change', event => {
+        const isOther = event.target.value === 'other';
+        customWorkplaceLabel.hidden = !isOther;
+        customWorkplaceInput.hidden = !isOther;
+        customWorkplaceInput.required = isOther;
+        setDistanceStatus(isOther ? 'Saisissez l’adresse du lieu de travail et votre adresse de départ, puis cliquez sur “Calculer”.' : 'Saisissez votre adresse de départ puis cliquez sur “Calculer”.');
+      });
+      calculateDistanceBtn.addEventListener('click', calculateDistanceFromAddress);
+    }
+
+    bindAddressAutocomplete();
+    bindEvents();
+    render();
+  </script>
+</body>
+</html>
