@@ -107,7 +107,7 @@
 
       <section class="card">
         <div class="title"><span class="n">3</span><h2 id="resultsTitle">Collègues compatibles</h2></div>
-        <p class="sub" id="resultsSubtitle">Même jour, horaire proche et itinéraire compatible.</p>
+        <p class="sub" id="resultsSubtitle">Trouvez d’abord les collègues compatibles, puis calculez l’itinéraire avec la personne choisie.</p>
         <div id="results" class="results"><div class="empty">Lancez une recherche pour afficher les possibilités.</div></div>
       </section>
     </div>
@@ -164,21 +164,248 @@ function setBusy(v,msg){state.busy=v;$('calculateBtn').disabled=v;$('publishBtn'
 function compactRoute(r){return{distance:Number(r.distance),duration:Number(r.duration),provider:r.provider,estimated:!!r.estimated,geometry:r.geometry}}
 async function buildDraft(resolve=true){let start=resolve?await resolveAddress(ui.start):{label:ui.start.value,city:ui.start.dataset.city||'',coordinates:point(ui.start)},end=resolve?await resolveAddress(ui.end):{label:ui.end.value,city:ui.end.dataset.city||'',coordinates:point(ui.end)};if(!start.coordinates||!end.coordinates)throw new Error('Renseignez les deux adresses.');let tt=type(),rr=role();let d={id:state.activeId||null,name:ui.name.value.trim()||'Utilisateur en cours',phone:ui.phone.value.trim(),email:ui.email.value.trim(),role:rr,tripType:tt,start,end,vehicleType:rr==='driver'?'personal':'none',companySite:'',registration:'',companyVehicleSheet:'',companyVehicleModel:'',personalVehicleReason:'',daysOfWeek:[],privacyMode:'exact',privacyRadiusKm:0,returnDate:'',returnTime:'',date:'',time:''};if(tt==='punctual'){d.date=ui.date.value;d.time=ui.time.value;if(!d.date||!d.time)throw new Error('Renseignez la date et l’heure.');if(rr==='driver'){if(vehicleChoice()==='company'){d.vehicleType='company';d.returnDate=ui.returnDate.value;d.returnTime=ui.returnTime.value;let opt=ui.companyVehicle.selectedOptions[0];if(!opt||!opt.value)throw new Error('Sélectionnez un véhicule société disponible.');d.companyVehicleSheet=opt.value;d.registration=opt.dataset.registration||'';d.companyVehicleModel=opt.dataset.model||''}else{d.vehicleType='personal';let reason=ui.personalReason.value;if(reason==='other')reason=ui.personalReasonOther.value.trim();d.personalVehicleReason=reason;if(!reason)throw new Error('Expliquez l’utilisation de la voiture personnelle.')}}}else{d.time=ui.regularTime.value;d.returnTime=ui.regularReturnTime.value;d.daysOfWeek=days();d.privacyMode=privacy();d.privacyRadiusKm=d.privacyMode==='approx1km'?1:0;if(!d.time||!d.daysOfWeek.length)throw new Error('Renseignez l’horaire et au moins un jour habituel.')}return d}
 function validatePublish(d){if(!ui.name.value.trim())throw new Error('Nom et prénom obligatoires.');if(!d.phone&&!d.email)throw new Error('Renseignez un téléphone et/ou un e-mail.');if(!validPhone(d.phone))throw new Error('Numéro de téléphone incomplet.');if(!validEmail(d.email))throw new Error('Adresse e-mail invalide.');if(!ui.consent.checked)throw new Error('Cochez l’accord de publication interne.')}
-async function calculate(){if(state.busy)return;let ok=false;setBusy(true,'Calcul de l’itinéraire');try{let d=await buildDraft(true),r=await route([d.start.coordinates,d.end.coordinates]);state.currentDraft=d;state.currentRoute=r;$('distanceMetric').textContent=fmtKm(r.distance);$('durationMetric').textContent=fmtMin(r.duration);$('providerMetric').textContent=r.provider;$('routeSubtitle').textContent=(d.tripType==='regular'?'Trajet régulier':'Trajet '+dateLabel(d.date)+' à '+d.time)+' · '+d.start.label+' → '+d.end.label;drawBase(d,r);await findMatches(d,r);ok=true;return{draft:d,route:r}}catch(e){toast(e.message,true);$('mapMessage').hidden=false;$('mapMessage').textContent=e.message;return null}finally{state.busy=false;$('calculateBtn').disabled=false;$('publishBtn').disabled=false;if(ok)$('mapMessage').hidden=true}}
+async function calculate(){
+  if(state.busy)return;
+  let ok=false;
+  setBusy(true,'Recherche des collègues compatibles');
+  try{
+    let d=await buildDraft(true);
+    state.currentDraft=d;
+    state.currentRoute=null;
+    $('distanceMetric').textContent='-';
+    $('durationMetric').textContent='-';
+    $('providerMetric').textContent='-';
+    $('routeSubtitle').textContent=(d.tripType==='regular'?'Trajet régulier':'Trajet '+dateLabel(d.date)+' à '+d.time)+' · '+d.start.label+' → '+d.end.label+' · sélectionnez un collègue pour calculer l’itinéraire';
+    drawBase(d,null);
+    await findMatches(d);
+    ok=true;
+    return{draft:d,route:null};
+  }catch(e){
+    toast(e.message||'Erreur pendant la recherche.',true);
+    $('mapMessage').hidden=false;
+    $('mapMessage').textContent=e.message||'Erreur pendant la recherche.';
+    return null;
+  }finally{
+    state.busy=false;
+    $('calculateBtn').disabled=false;
+    $('publishBtn').disabled=false;
+    if(ok)$('mapMessage').hidden=true;
+  }
+}
 function roleOk(a,b){return a.role!==b.role&&['driver','passenger'].includes(a.role)&&['driver','passenger'].includes(b.role)}
-async function findMatches(d,r){state.trips=await listTrips();let arr=[];if(d.tripType==='regular'){arr=state.trips.filter(t=>t.tripType==='regular'&&roleOk(d,t)&&(!d.id||t.id!==d.id)&&commonDays(d.daysOfWeek,t.daysOfWeek).length).map(t=>{let home=hav(d.start.coordinates,t.start.coordinates),dest=hav(d.end.coordinates,t.end.coordinates),td=Math.abs(timeMinutes(d.time)-timeMinutes(t.time));return{candidate:t,homeKm:home,destKm:dest,timeDiff:td,days:commonDays(d.daysOfWeek,t.daysOfWeek),score:Math.max(0,100-home*7-dest*10-td*.5)}}).filter(m=>m.homeKm<=8&&m.destKm<=4&&m.timeDiff<=CFG.TIME_WINDOW).sort((a,b)=>b.score-a.score).slice(0,12)}else{let candidates=state.trips.filter(t=>(t.tripType||'punctual')==='punctual'&&roleOk(d,t)&&t.date===d.date&&(!d.id||t.id!==d.id)&&Math.abs(timeMinutes(d.time)-timeMinutes(t.time))<=CFG.TIME_WINDOW);for(let t of candidates.slice(0,CFG.MAX_MATCHES)){let driver=d.role==='driver'?d:t,passenger=d.role==='passenger'?d:t;let base=d.role==='driver'?r:(t.route?.geometry?t.route:await route([t.start.coordinates,t.end.coordinates]));try{let combined=await route([driver.start.coordinates,passenger.start.coordinates,passenger.end.coordinates,driver.end.coordinates]);let extra=Math.max(0,combined.duration-base.duration),td=Math.abs(timeMinutes(d.time)-timeMinutes(t.time));if(extra<=40)arr.push({candidate:t,combined,extraMinutes:extra,timeDiff:td,score:Math.max(0,100-extra*2.2-td*.3)})}catch(_){}}arr.sort((a,b)=>b.score-a.score)}state.matches=arr;$('matchesMetric').textContent=arr.length;renderResults(d);if(d.tripType==='regular')drawNearby(d,r,arr)}
-function drawNearby(d,r,arr){drawBase(d,r);arr.forEach(m=>{let t=m.candidate,p=t.start.coordinates;if(t.privacyMode==='approx1km')L.circle([p[1],p[0]],{radius:1000,color:'#e08a00',fillOpacity:.08}).addTo(state.layers).bindPopup('<strong>'+esc(t.name)+'</strong><br>Zone domicile approximative<br>'+esc(contact(t)));else marker(p,t.name,'Domicile publié · '+contact(t))});fitMap()}
-function renderResults(d){ui.results.innerHTML='';$('resultsTitle').textContent=d.tripType==='regular'?'Collaborateurs proches de chez moi':'Collègues compatibles';$('resultsSubtitle').textContent=d.tripType==='regular'?'Proximité du domicile, site d’arrivée, jours communs et horaires proches.':'Même jour, horaire proche et détour raisonnable.';if(!state.matches.length){ui.results.innerHTML='<div class="empty">Aucun collègue compatible pour le moment. Vous pouvez quand même publier votre trajet.</div>';return}state.matches.forEach((m,i)=>{let t=m.candidate,el=document.createElement('article');el.className='result';let regular=d.tripType==='regular';el.innerHTML='<div><h3>'+esc(t.name)+' · '+(t.role==='driver'?'conducteur':'passager')+'</h3><p>'+esc(t.start.label)+' → '+esc(t.end.label)+'</p><div class="meta">'+(regular?'<span class="tag green">Covoiturage possible : '+esc(formatDays(m.days))+'</span><span class="tag">à ~'+m.homeKm.toFixed(1)+' km de votre zone</span>':'<span class="tag green">+'+Math.round(m.extraMinutes)+' min</span>')+'<span class="tag">écart horaire '+m.timeDiff+' min</span><span class="tag amber">'+esc(contact(t))+'</span></div></div><div><strong style="color:var(--green)">'+Math.round(m.score)+'/100</strong></div>';let c=document.createElement('div');c.className='contacts';if(t.phone){let a=document.createElement('a');a.className='btn neutral small';a.href='tel:'+t.phone.replace(/[^+\d]/g,'');a.textContent='Appeler';c.appendChild(a)}if(t.email){let a=document.createElement('a');a.className='btn neutral small';a.href='mailto:'+encodeURIComponent(t.email)+'?subject='+encodeURIComponent('Covoiturage interne');a.textContent='E-mail';c.appendChild(a)}let b=document.createElement('button');b.type='button';b.className='btn secondary small';b.textContent='Voir sur la carte';b.onclick=()=>showMatch(i);c.appendChild(b);el.appendChild(c);ui.results.appendChild(el)})}
-function showMatch(i){let m=state.matches[i],d=state.currentDraft;if(!m||!d)return;if(d.tripType==='regular'){drawNearby(d,state.currentRoute,[m]);return}drawBase(d,state.currentRoute);if(m.combined)addRoute(m.combined,'#e08a00',7,.9);marker(m.candidate.start.coordinates,m.candidate.name,'Départ collègue');marker(m.candidate.end.coordinates,m.candidate.name,'Arrivée collègue');fitMap()}
+async function findMatches(d){
+  state.trips=await listTrips();
+  let arr=[];
+  if(d.tripType==='regular'){
+    arr=state.trips
+      .filter(t=>t.tripType==='regular'&&roleOk(d,t)&&(!d.id||t.id!==d.id)&&commonDays(d.daysOfWeek,t.daysOfWeek).length>0)
+      .map(t=>{
+        let home=hav(d.start.coordinates,t.start.coordinates);
+        let dest=hav(d.end.coordinates,t.end.coordinates);
+        let td=Math.abs(timeMinutes(d.time)-timeMinutes(t.time));
+        return{
+          candidate:t,
+          homeKm:home,
+          destKm:dest,
+          timeDiff:td,
+          days:commonDays(d.daysOfWeek,t.daysOfWeek),
+          score:Math.max(0,100-home*7-dest*10-td*.5),
+          combined:null,
+          baseRoute:null,
+          extraMinutes:null
+        };
+      })
+      .filter(m=>m.homeKm<=8&&m.destKm<=4&&m.timeDiff<=CFG.TIME_WINDOW)
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,12);
+  }else{
+    arr=state.trips
+      .filter(t=>(t.tripType||'punctual')==='punctual'&&roleOk(d,t)&&t.date===d.date&&(!d.id||t.id!==d.id)&&Math.abs(timeMinutes(d.time)-timeMinutes(t.time))<=CFG.TIME_WINDOW)
+      .map(t=>{
+        let startKm=hav(d.start.coordinates,t.start.coordinates);
+        let destKm=hav(d.end.coordinates,t.end.coordinates);
+        let td=Math.abs(timeMinutes(d.time)-timeMinutes(t.time));
+        return{
+          candidate:t,
+          startKm,
+          destKm,
+          timeDiff:td,
+          score:Math.max(0,100-startKm*4-destKm*7-td*.35),
+          combined:null,
+          baseRoute:null,
+          extraMinutes:null
+        };
+      })
+      .filter(m=>m.startKm<=20&&m.destKm<=10)
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,12);
+  }
+  state.matches=arr;
+  $('matchesMetric').textContent=arr.length;
+  renderResults(d);
+  if(d.tripType==='regular')drawNearby(d,null,arr);
+}
+function drawNearby(d,r,arr){
+  drawBase(d,r||null);
+  arr.forEach(m=>{
+    let t=m.candidate,p=t.start.coordinates;
+    if(t.privacyMode==='approx1km'){
+      L.circle([p[1],p[0]],{radius:1000,color:'#e08a00',fillOpacity:.08})
+        .addTo(state.layers)
+        .bindPopup('<strong>'+esc(t.name)+'</strong><br>Zone domicile approximative<br>'+esc(contact(t)));
+    }else{
+      marker(p,t.name,'Domicile publié · '+contact(t));
+    }
+  });
+  fitMap();
+}
+function renderResults(d){
+  ui.results.innerHTML='';
+  $('resultsTitle').textContent=d.tripType==='regular'?'Collaborateurs proches de chez moi':'Collègues compatibles';
+  $('resultsSubtitle').textContent=d.tripType==='regular'?'Proximité du domicile, site d’arrivée, jours communs et horaires proches. Choisissez ensuite un collègue pour calculer le trajet.':'Même date, horaire et trajet proches. Choisissez ensuite un collègue pour calculer le trajet.';
+  if(!state.matches.length){
+    ui.results.innerHTML='<div class="empty">Aucun collègue compatible pour le moment. Vous pouvez quand même publier votre trajet.</div>';
+    return;
+  }
+  state.matches.forEach((m,i)=>{
+    let t=m.candidate,el=document.createElement('article');
+    el.className='result';
+    el.id='match-'+i;
+    let regular=d.tripType==='regular';
+    let compatibility=regular
+      ?'<span class="tag green">Covoiturage possible : '+esc(formatDays(m.days))+'</span><span class="tag">à ~'+m.homeKm.toFixed(1)+' km de votre zone</span>'
+      :'<span class="tag green">départ à ~'+m.startKm.toFixed(1)+' km</span><span class="tag">arrivée à ~'+m.destKm.toFixed(1)+' km</span>';
+    el.innerHTML='<div><h3>'+esc(t.name)+' · '+(t.role==='driver'?'conducteur':'passager')+'</h3><p>'+esc(t.start.label)+' → '+esc(t.end.label)+'</p><div class="meta">'+compatibility+'<span class="tag">écart horaire '+m.timeDiff+' min</span><span class="tag amber">'+esc(contact(t))+'</span></div><div class="notice" id="matchInfo-'+i+'" hidden></div></div><div><strong style="color:var(--green)">'+Math.round(m.score)+'/100</strong></div>';
+    let actions=document.createElement('div');
+    actions.className='contacts';
+    if(t.phone){
+      let a=document.createElement('a');
+      a.className='btn neutral small';
+      a.href='tel:'+t.phone.replace(/[^+\d]/g,'');
+      a.textContent='Appeler';
+      actions.appendChild(a);
+    }
+    if(t.email){
+      let a=document.createElement('a');
+      a.className='btn neutral small';
+      a.href='mailto:'+encodeURIComponent(t.email)+'?subject='+encodeURIComponent('Covoiturage interne');
+      a.textContent='E-mail';
+      actions.appendChild(a);
+    }
+    let b=document.createElement('button');
+    b.type='button';
+    b.className='btn secondary small';
+    b.textContent='Calculer l’itinéraire';
+    b.onclick=()=>calculateMatchRoute(i,b);
+    actions.appendChild(b);
+    el.appendChild(actions);
+    ui.results.appendChild(el);
+  });
+}
+async function calculateMatchRoute(i,button){
+  let m=state.matches[i],d=state.currentDraft;
+  if(!m||!d)return;
+  if(m.combined){
+    showCalculatedMatch(i);
+    return;
+  }
+  const oldText=button?button.textContent:'';
+  if(button){
+    button.disabled=true;
+    button.textContent='Calcul…';
+  }
+  $('mapMessage').hidden=false;
+  $('mapMessage').innerHTML='<span class="spinner"></span>Calcul de l’itinéraire avec '+esc(m.candidate.name);
+  try{
+    let t=m.candidate;
+    let driver=d.role==='driver'?d:t;
+    let passenger=d.role==='passenger'?d:t;
+    let baseRoute=await route([driver.start.coordinates,driver.end.coordinates]);
+    let combined=await route([
+      driver.start.coordinates,
+      passenger.start.coordinates,
+      passenger.end.coordinates,
+      driver.end.coordinates
+    ]);
+    m.baseRoute=baseRoute;
+    m.combined=combined;
+    m.extraMinutes=Math.max(0,combined.duration-baseRoute.duration);
+    m.extraDistance=Math.max(0,combined.distance-baseRoute.distance);
+    showCalculatedMatch(i);
+    if(button)button.textContent='Itinéraire affiché';
+  }catch(e){
+    toast(e.message||'Impossible de calculer cet itinéraire.',true);
+    if(button){
+      button.disabled=false;
+      button.textContent=oldText||'Calculer l’itinéraire';
+    }
+  }finally{
+    $('mapMessage').hidden=true;
+  }
+}
+
+function showCalculatedMatch(i){
+  let m=state.matches[i],d=state.currentDraft;
+  if(!m||!d||!m.combined)return;
+  let t=m.candidate;
+  let driver=d.role==='driver'?d:t;
+  let passenger=d.role==='passenger'?d:t;
+  state.currentRoute=m.combined;
+  clearMap();
+  addRoute(m.combined,'#006247',7,.9);
+  marker(driver.start.coordinates,'Départ conducteur',driver.start.label);
+  marker(passenger.start.coordinates,'Prise en charge',passenger.start.label);
+  marker(passenger.end.coordinates,'Destination passager',passenger.end.label);
+  if(hav(passenger.end.coordinates,driver.end.coordinates)>.15){
+    marker(driver.end.coordinates,'Destination conducteur',driver.end.label);
+  }
+  fitMap();
+  $('distanceMetric').textContent=fmtKm(m.combined.distance);
+  $('durationMetric').textContent=fmtMin(m.combined.duration);
+  $('providerMetric').textContent=m.combined.provider;
+  $('routeSubtitle').textContent='Itinéraire de covoiturage avec '+t.name+' · '+fmtKm(m.combined.distance)+' · '+fmtMin(m.combined.duration)+' · +'+Math.round(m.extraMinutes)+' min pour le conducteur';
+  let info=$('matchInfo-'+i);
+  if(info){
+    info.hidden=false;
+    info.innerHTML='<strong>Itinéraire calculé</strong><br>'+fmtKm(m.combined.distance)+' · '+fmtMin(m.combined.duration)+' · détour estimé : +'+Math.round(m.extraMinutes)+' min / +'+fmtKm(m.extraDistance);
+  }
+}
 async function listTrips(){if(apps())return await server('listTrips');try{return JSON.parse(localStorage.getItem(CFG.LOCAL)||'[]')}catch(_){return[]}}
 async function createTrip(payload){if(apps())return await server('createTrip',payload);let list=await listTrips(),id=crypto.randomUUID?crypto.randomUUID():'local-'+Date.now(),trip=Object.assign({},payload.trip,{id,createdAt:new Date().toISOString(),status:'active',source:'local'});list.unshift(trip);localStorage.setItem(CFG.LOCAL,JSON.stringify(list));return{trip,managementToken:'local'}}
 async function deleteTrip(id){if(apps()){let token=localStorage.getItem(CFG.TOKEN+id)||'';return await server('deleteTrip',id,token)}let list=(await listTrips()).filter(t=>t.id!==id);localStorage.setItem(CFG.LOCAL,JSON.stringify(list));return{success:true}}
-async function publish(){let res=state.currentDraft&&state.currentRoute?{draft:await buildDraft(true),route:state.currentRoute}:await calculate();if(!res)return;try{validatePublish(res.draft);let d=res.draft,r=res.route;if(d.tripType==='regular'&&d.privacyMode==='approx1km'){let p=approxPoint(d.start.coordinates);d=Object.assign({},d,{start:{label:'Zone approximative d’environ 1 km'+(d.start.city?' - '+d.start.city:''),city:d.start.city,coordinates:p}});r=await route([p,d.end.coordinates])}d.route=compactRoute(r);let out=await createTrip({trip:d});if(out.managementToken)localStorage.setItem(CFG.TOKEN+out.trip.id,out.managementToken);state.activeId=out.trip.id;toast(out.vehicleReservation?'Trajet publié et véhicule société réservé.':'Trajet publié.');await refreshTrips();state.currentDraft=d;state.currentRoute=r;await findMatches(d,r)}catch(e){toast(e.message,true)}}
+async function publish(){
+  try{
+    let d=await buildDraft(true);
+    validatePublish(d);
+    if(d.tripType==='regular'&&d.privacyMode==='approx1km'){
+      let p=approxPoint(d.start.coordinates);
+      d=Object.assign({},d,{
+        start:{
+          label:'Zone approximative d’environ 1 km'+(d.start.city?' - '+d.start.city:''),
+          city:d.start.city,
+          coordinates:p
+        }
+      });
+    }
+    d.route=state.currentRoute
+      ?compactRoute(state.currentRoute)
+      :{distance:0,duration:0,provider:'',estimated:true,geometry:null};
+    let out=await createTrip({trip:d});
+    if(out.managementToken)localStorage.setItem(CFG.TOKEN+out.trip.id,out.managementToken);
+    state.activeId=out.trip.id;
+    toast(out.vehicleReservation?'Trajet publié et véhicule société réservé.':'Trajet publié.');
+    await refreshTrips();
+    state.currentDraft=d;
+    await findMatches(d);
+  }catch(e){
+    toast(e.message,true);
+  }
+}
 async function refreshTrips(){try{state.trips=await listTrips();renderSaved()}catch(e){ui.saved.innerHTML='<div class="empty" style="grid-column:1/-1">'+esc(e.message)+'</div>'}}
 function renderSaved(){ui.saved.innerHTML='';if(!state.trips.length){ui.saved.innerHTML='<div class="empty" style="grid-column:1/-1">Aucun trajet publié.</div>';return}state.trips.slice(0,30).forEach(t=>{let el=document.createElement('article');el.className='saveditem';let sched=t.tripType==='regular'?(t.daysOfWeek||[]).join(', ')+' · '+t.time:(dateLabel(t.date)+' · '+t.time);el.innerHTML='<h3>'+esc(t.name)+' · '+(t.tripType==='regular'?'régulier':'ponctuel')+'</h3><p>'+esc(t.start.label)+' → '+esc(t.end.label)+'</p><div class="meta"><span class="tag green">'+esc(sched)+'</span><span class="tag">'+(t.role==='driver'?'Conducteur':'Passager')+'</span>'+(t.vehicleType==='company'?'<span class="tag amber">'+esc(t.registration||'Véhicule société')+'</span>':'')+'</div><p>'+esc(contact(t))+'</p>';if(localStorage.getItem(CFG.TOKEN+t.id)||!apps()){let b=document.createElement('button');b.type='button';b.className='btn danger small';b.textContent='Supprimer';b.onclick=async()=>{if(confirm('Supprimer ce trajet ?')){try{await deleteTrip(t.id);await refreshTrips();toast('Trajet supprimé.')}catch(e){toast(e.message,true)}}};el.appendChild(b)}ui.saved.appendChild(el)})}
 async function refreshVehicles(){if(type()!=='punctual'||role()!=='driver'||vehicleChoice()!=='company')return;let req={startDate:ui.date.value,startTime:ui.time.value,returnDate:ui.returnDate.value,returnTime:ui.returnTime.value};if(!req.startDate||!req.startTime||!req.returnDate||!req.returnTime){ui.vehicleAvailability.innerHTML='<div class="help">Renseignez le départ et le retour pour vérifier les disponibilités.</div>';return}ui.vehicleAvailability.innerHTML='<div class="help"><span class="spinner"></span>Vérification du planning…</div>';try{let list=apps()?await server('getCompanyVehicleAvailability',req):[];state.vehicleAvailability=list;ui.companyVehicle.innerHTML='<option value="">Sélectionner</option>';let html='';list.forEach(v=>{html+='<div class="vehicle"><div><strong>'+esc(v.registration)+' · '+esc(v.model)+'</strong><br><small>'+esc(v.sheetName)+'</small></div><span class="'+(v.available?'ok':'no')+'">'+(v.available?'Disponible':'Indisponible')+'</span></div>';if(v.available){let o=document.createElement('option');o.value=v.sheetName;o.textContent=v.registration+' · '+v.model;o.dataset.registration=v.registration;o.dataset.model=v.model;ui.companyVehicle.appendChild(o)}});ui.vehicleAvailability.innerHTML=html||'<div class="help">Aucun véhicule exploitable dans le planning.</div>';if(!list.some(v=>v.available)){form.querySelector('input[name="vehicleChoice"][value="personal"]').checked=true;updateVehicleUI();ui.personalReason.value='Aucun véhicule société disponible'}}catch(e){ui.vehicleAvailability.innerHTML='<div class="notice warn">'+esc(e.message)+'</div>'}}
 function updateVehicleUI(){let driver=role()==='driver',regular=type()==='regular';$('vehicleFields').hidden=!driver;$('punctualVehicleFields').hidden=regular;$('regularVehicleMessage').hidden=!regular;if(!driver)return;if(regular)return;let company=vehicleChoice()==='company';$('companyVehicleBlock').hidden=!company;$('personalReasonBlock').hidden=company;if(company)refreshVehicles()}
-function updateTypeUI(){let regular=type()==='regular';$('punctualFields').hidden=regular;$('regularFields').hidden=!regular;$('privacyFields').hidden=!regular;$('startLabel').textContent=regular?'Adresse de domicile *':'Adresse de départ *';$('endLabel').textContent=regular?'Lieu de travail / site *':'Adresse d’arrivée *';$('resultsTitle').textContent=regular?'Collaborateurs proches de chez moi':'Collègues compatibles';$('resultsSubtitle').textContent=regular?'Proximité du domicile et habitudes compatibles.':'Même jour, horaire proche et itinéraire compatible.';updateVehicleUI();state.currentDraft=null;state.matches=[];ui.results.innerHTML='<div class="empty">Lancez une recherche pour afficher les possibilités.</div>'}
+function updateTypeUI(){let regular=type()==='regular';$('punctualFields').hidden=regular;$('regularFields').hidden=!regular;$('privacyFields').hidden=!regular;$('startLabel').textContent=regular?'Adresse de domicile *':'Adresse de départ *';$('endLabel').textContent=regular?'Lieu de travail / site *':'Adresse d’arrivée *';$('resultsTitle').textContent=regular?'Collaborateurs proches de chez moi':'Collègues compatibles';$('resultsSubtitle').textContent=regular?'Jours, horaires et proximité compatibles. Sélectionnez ensuite un collègue pour calculer le trajet.':'Même jour, horaire proche et itinéraire compatible.';updateVehicleUI();state.currentDraft=null;state.matches=[];ui.results.innerHTML='<div class="empty">Lancez une recherche pour afficher les possibilités.</div>'}
 function updateReason(){ $('personalReasonOtherBlock').hidden=ui.personalReason.value!=='other' }
 form.querySelectorAll('input[name="tripType"]').forEach(x=>x.addEventListener('change',updateTypeUI));form.querySelectorAll('input[name="role"]').forEach(x=>x.addEventListener('change',updateVehicleUI));form.querySelectorAll('input[name="vehicleChoice"]').forEach(x=>x.addEventListener('change',updateVehicleUI));[ui.date,ui.time,ui.returnDate,ui.returnTime].forEach(x=>x.addEventListener('change',()=>{state.currentDraft=null;if(vehicleChoice()==='company')refreshVehicles()}));ui.personalReason.addEventListener('change',updateReason);$('calculateBtn').onclick=calculate;$('publishBtn').onclick=publish;bindAutocomplete(ui.start,$('startSuggestions'));bindAutocomplete(ui.end,$('endSuggestions'));
 async function start(){setDefaults();$('modeBadge').textContent=apps()?'Liste partagée en direct':'Aperçu local';initMap();updateTypeUI();await refreshTrips();if(apps())setInterval(refreshTrips,60000)}start();
